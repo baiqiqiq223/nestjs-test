@@ -53,12 +53,19 @@ export class OssService {
   }
 
   private buildObjectKey(dto: CreateUploadSignatureDto): string {
-    const safeUploadDir = this.trimSlashes(this.ossConfig.uploadDir);
     const safeScene = this.trimSlashes(dto.scene ?? 'default');
-    const datePath = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+    const datePath = this.formatDatePath(new Date());
     const extension = this.getSafeExtension(dto.fileName);
 
-    return `${safeUploadDir}/${safeScene}/${datePath}/${randomUUID()}${extension}`;
+    return `${safeScene}/${datePath}/${randomUUID()}${extension}`;
+  }
+
+  private formatDatePath(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}${month}${day}`;
   }
 
   private getSafeExtension(fileName?: string): string {

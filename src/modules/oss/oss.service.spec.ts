@@ -2,8 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import { OssService } from './oss.service';
 
 describe('OssService', () => {
-  it('creates a temporary upload signature scoped to one object key', () => {
-    const service = new OssService(
+  const createService = () =>
+    new OssService(
       new ConfigService({
         oss: {
           region: 'oss-cn-hangzhou',
@@ -17,6 +17,9 @@ describe('OssService', () => {
       }),
     );
 
+  it('creates a temporary upload signature scoped to one object key', () => {
+    const service = createService();
+
     const signature = service.createUploadSignature({
       fileName: 'avatar.png',
       contentType: 'image/png',
@@ -26,9 +29,20 @@ describe('OssService', () => {
     const policy = JSON.parse(Buffer.from(signature.policy, 'base64').toString('utf8'));
 
     expect(signature.host).toBe('https://demo-bucket.oss-cn-hangzhou.aliyuncs.com');
-    expect(signature.key).toMatch(/^uploads\/avatar\/\d{4}\/\d{2}\/\d{2}\/.+\.png$/);
+    expect(signature.key).toMatch(/^avatar\/\d{8}\/.+\.png$/);
     expect(signature.signature).toBeTruthy();
     expect(policy.conditions).toContainEqual(['eq', '$key', signature.key]);
     expect(policy.conditions).toContainEqual(['content-length-range', 1, 20 * 1024 * 1024]);
+  });
+
+  it('uses default scene when scene is not provided', () => {
+    const service = createService();
+
+    const signature = service.createUploadSignature({
+      fileName: 'avatar.png',
+      contentType: 'image/png',
+    });
+
+    expect(signature.key).toMatch(/^default\/\d{8}\/.+\.png$/);
   });
 });
