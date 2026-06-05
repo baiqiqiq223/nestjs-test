@@ -15,4 +15,7 @@ export const envValidationSchema = Joi.object({
   OSS_UPLOAD_DIR: Joi.string().trim().default('uploads'),
   OSS_SIGNATURE_EXPIRE_SECONDS: Joi.number().integer().min(30).max(3600).default(300),
   OSS_MAX_FILE_SIZE_MB: Joi.number().integer().min(1).max(500).default(20),
+
+  WECHAT_MINI_APP_ID: Joi.string().trim().required(),
+  WECHAT_MINI_APP_SECRET: Joi.string().trim().required(),
 }).unknown(true);

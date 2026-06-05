@@ -94,6 +94,9 @@ OSS_ACCESS_KEY_SECRET=your-ram-access-key-secret
 OSS_UPLOAD_DIR=uploads
 OSS_SIGNATURE_EXPIRE_SECONDS=300
 OSS_MAX_FILE_SIZE_MB=20
+
+WECHAT_MINI_APP_ID=your-wechat-mini-app-id
+WECHAT_MINI_APP_SECRET=your-wechat-mini-app-secret
 ```
 
 生产环境建议：
@@ -157,6 +160,203 @@ GET /api/v1/oss/upload/signature?contentType=image/png&fileName=avatar.png&scene
 | `data.expireAt` | 签名过期时间 |
 | `data.maxFileSize` | 允许上传的最大文件大小，单位字节 |
 | `data.successActionStatus` | OSS 上传成功后返回的 HTTP 状态码 |
+
+## 微信小程序登录
+
+请求：
+
+```http
+POST /api/v1/auth/wechat/login
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "code": "wx.login 返回的 code",
+  "nickname": "微信昵称",
+  "avatarUrl": "http://tmp/2Gi15mYa8P8Mbe5eb9ec15490fcbe71e37f858d8ba32.jpeg"
+}
+```
+
+说明：
+
+- 小程序前端调用 `wx.login` 获取 `code`，再把 `code` 传给后端。
+- `nickname` 和 `avatarUrl` 为可选字段，用于保存前端获取到的微信昵称和头像。
+- 如果本次登录没有传 `nickname` 或 `avatarUrl`，后端会保留用户之前保存的资料。
+- 后端使用 `WECHAT_MINI_APP_ID` 和 `WECHAT_MINI_APP_SECRET` 调用微信 `jscode2session` 接口。
+- 后端不会把微信 `session_key` 返回给前端，只返回自建登录态 `token`。
+- 后续需要登录的接口，在请求头携带 `Authorization: Bearer <token>`。
+- `token` 30 天未使用会自动过期；每次鉴权成功都会把有效期顺延 30 天。
+
+参数说明：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `code` | 是 | `wx.login` 返回的临时登录凭证 |
+| `nickname` | 否 | 微信昵称，最多 30 个字符 |
+| `avatarUrl` | 否 | 微信头像 URL，支持 `https://...` 和微信临时头像地址 `http://tmp/...` |
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "token": "backend-token",
+    "expiresIn": 2592000,
+    "expiresAt": "2026-06-19T10:00:00.000Z",
+    "user": {
+      "id": "user-id",
+      "openid": "wechat-openid",
+      "unionid": "wechat-unionid",
+      "nickname": "微信昵称",
+      "avatarUrl": "https://example.com/avatar.png"
+    }
+  },
+  "timestamp": "2026-05-20T10:00:00.000Z",
+  "path": "/api/v1/auth/wechat/login"
+}
+```
+
+返回字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `data.token` | 后端生成的登录 token，后续请求通过 `Authorization: Bearer <token>` 携带 |
+| `data.expiresIn` | token 未使用自动过期时间，单位秒，当前为 30 天 |
+| `data.expiresAt` | token 当前过期时间；每次鉴权成功后会顺延 30 天 |
+| `data.user.id` | 后端内部用户 ID，用于关联图片等业务数据 |
+| `data.user.openid` | 微信小程序用户 `openid`，同一个小程序内唯一 |
+| `data.user.unionid` | 微信开放平台 `unionid`，满足微信条件时返回，可用于多应用用户打通 |
+| `data.user.nickname` | 用户微信昵称，前端传入后保存并返回 |
+| `data.user.avatarUrl` | 用户微信头像 URL，前端传入后保存并返回 |
+
+## 上传图片信息
+
+请求：
+
+```http
+POST /api/v1/images
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+请求体：
+
+```json
+{
+  "imageUrl": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/uploads/demo.png",
+  "title": "图片标题",
+  "description": "图片描述"
+}
+```
+
+参数说明：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `imageUrl` | 是 | 前端直传 OSS 成功后得到的图片 URL，必须是带协议的完整 URL |
+| `title` | 是 | 图片标题，最多 20 个字符 |
+| `description` | 是 | 图片描述，最多 100 个字符 |
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": "image-id",
+    "userId": "user-id",
+    "imageUrl": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/uploads/demo.png",
+    "title": "图片标题",
+    "description": "图片描述",
+    "createdAt": "2026-05-20T10:00:00.000Z",
+    "updatedAt": "2026-05-20T10:00:00.000Z"
+  },
+  "timestamp": "2026-05-20T10:00:00.000Z",
+  "path": "/api/v1/images"
+}
+```
+
+返回字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `data.id` | 图片记录 ID |
+| `data.userId` | 当前登录用户的后端内部用户 ID |
+| `data.imageUrl` | 图片 OSS 地址 |
+| `data.title` | 图片标题 |
+| `data.description` | 图片描述 |
+| `data.createdAt` | 图片记录创建时间 |
+| `data.updatedAt` | 图片记录更新时间 |
+
+## 获取图片列表
+
+请求：
+
+```http
+GET /api/v1/images?page=1&pageSize=20
+Authorization: Bearer <token>
+```
+
+查询参数：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `page` | 否 | 页码，默认 `1` |
+| `pageSize` | 否 | 每页数量，默认 `20`，最大 `100` |
+
+说明：
+
+- 接口只返回当前登录用户上传的图片。
+- 当前版本使用内存存储，服务重启后用户 token 和图片记录会丢失；接入数据库后应持久化用户和图片表。
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "id": "image-id",
+        "userId": "user-id",
+        "imageUrl": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/uploads/demo.png",
+        "title": "图片标题",
+        "description": "图片描述",
+        "createdAt": "2026-05-20T10:00:00.000Z",
+        "updatedAt": "2026-05-20T10:00:00.000Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "pageSize": 20
+  },
+  "timestamp": "2026-05-20T10:00:00.000Z",
+  "path": "/api/v1/images?page=1&pageSize=20"
+}
+```
+
+返回字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `data.items` | 当前页图片记录列表 |
+| `data.items[].id` | 图片记录 ID |
+| `data.items[].userId` | 图片所属用户的后端内部用户 ID |
+| `data.items[].imageUrl` | 图片 OSS 地址 |
+| `data.items[].title` | 图片标题 |
+| `data.items[].description` | 图片描述 |
+| `data.items[].createdAt` | 图片记录创建时间 |
+| `data.items[].updatedAt` | 图片记录更新时间 |
+| `data.total` | 当前登录用户的图片总数 |
+| `data.page` | 当前页码 |
+| `data.pageSize` | 每页数量 |
 
 ## 前端上传表单字段
 
